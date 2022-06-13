@@ -1,40 +1,66 @@
+"""Da Kommentar."""
+import select
 import socket
 
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)       # Internet, UDP
+ports_receive = {
+    "S3": [1616, 0],
+    "S4": [1617, 0],
+    "B6": [1605, 0],
+    "B7": [1606, 0],
+    "B8": [1607, 0],
+    "B9": [1608, 0],
+}
 
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1623) # reuse already used port address 160
-# deblock if former programm run got crashed
+ports_send = {
+    "Q4": [1703, 0],
+    "Q5": [1704, 0],
+    "P1": [1713, 0],
+    "E6": [1714, 0],
+}
 
-s.setblocking(0)                 # setting to non-blocking socket mode -> socket.SOCK_NONBLOCK not supported by Windows
+sockets_receive_list = []
+
+socket_send = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
-s.bind(('localhost', 1623))      # Socket stays open + keeps used Portnummer... if not properly closed at the end
-# double parenthesis since 1 parameter (== union) expected
+def get_key(val: int) -> str:
+    """Da Kommentar."""
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  
+    return next(
+        (key for key, value in ports_receive.items() if val == value[0]),
+        "key doesn't exist",
+    )
 
-LICHT =  False
 
-print(LICHT)
+for dict_data in ports_receive.items():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, dict_data[1][0])
+    server_socket.setblocking(False)
+    server_socket.bind(("localhost", dict_data[1][0]))
+    sockets_receive_list.append(server_socket)
+
 
 while True:
-    # Abbruch der Schleife
-
     try:
-        msg, addr = s.recvfrom(1024)  
-        # Normally blocks here if no Date reception -> Keyboard press not detected
-        # Thus: placing socket in non-blocking mode required (see above)
-        # generates "BlockingIOError" if Data couldn't be read at once -> Handling necessary
-        # 1024 == amount of bytes to read at maximum
-        print("Got message from %s: %s" % (addr, msg))
-        S_01 = int(msg)
-        LICHT = S_01
-    except socket.error as e:   # supress BlockingIOError from non-blocking socket access if no Data received
-        #print ("Error creating socket: %s" % e)
-        pass    
-   
+        readable, writable, exceptional = select.select(sockets_receive_list, [], [])
+        for s in readable:
+            try:
+                (client_data, client_address) = s.recvfrom(1024)
+                print(get_key(client_address[1]), "is", str(client_data, "utf-8"))
+                ports_receive[get_key(client_address[1])][1] = int(
+                    str(client_data, "utf-8")
+                )
+            except OSError as e:
+                print(f"Error creating socket: {e}")
+    except (OSError, ValueError) as e:
+        print(f"Error select socket: {e}")
 
-    print (LICHT)
-    sock.sendto(str.encode(str(LICHT)), ('localhost', 1703))
-s.close()    # close socket
-print ("Socket closed")
+    # da Logik schriebe
+    ports_send["Q4"][1] = ports_receive["S3"][1]
+    # loop für sendto mache
+    socket_send.sendto(
+        str.encode(str(ports_send["Q4"][1])), ("localhost", ports_send["Q4"][0])
+    )
+
+server_socket.close()
+print("Socket closed")
